@@ -1,7 +1,7 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { GradientButton } from '@/components/ui/gradient-button';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { cn } from "@/lib/utils";
 import { Contact7 } from '@/components/ui/contact-7';
@@ -14,9 +14,18 @@ import { GradientText } from '@/components/ui/gradient-text';
 import { StarBorder } from "@/components/ui/star-border";
 import { Moon, Sun } from 'lucide-react';
 import { useTheme } from '@/hooks/use-theme';
+import { useAuth } from '@/contexts/AuthContext';
 
 const LandingPage: React.FC = () => {
   const { theme, setTheme } = useTheme();
+  const { isAuthenticated } = useAuth();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      navigate('/dashboard', { replace: true });
+    }
+  }, [isAuthenticated, navigate]);
 
   return (
     <div className="min-h-screen flex flex-col">

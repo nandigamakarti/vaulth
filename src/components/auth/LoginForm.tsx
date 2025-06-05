@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Loader, Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import { StarBorder } from '@/components/ui/star-border';
 
 const formSchema = z.object({
   email: z.string().email('Please enter a valid email address'),
@@ -99,7 +100,13 @@ const LoginForm: React.FC = () => {
             </Link>
           </div>
 
-          <GradientButton type="submit" className="w-full" disabled={isSubmitting}>
+          <StarBorder
+            as="button"
+            type="submit"
+            className="w-full mt-2 text-lg md:text-xl rounded-full shadow-lg hover:shadow-xl transition-shadow duration-300"
+            color="hsl(var(--primary))"
+            disabled={isSubmitting}
+          >
             {isSubmitting ? (
               <>
                 <Loader className="mr-2 h-4 w-4 animate-spin" />
@@ -108,7 +115,7 @@ const LoginForm: React.FC = () => {
             ) : (
               'Sign In'
             )}
-          </GradientButton>
+          </StarBorder>
         </form>
       </Form>
 

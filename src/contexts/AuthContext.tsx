@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { getItem, setItem, removeItem } from '@/lib/local-storage';
+import { getItem, setItem, removeItem, clearAllData } from '@/lib/local-storage';
 import { supabase } from '@/integrations/supabase/client';
 
 // Types
@@ -35,76 +35,119 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Supabase auth state change listener
   useEffect(() => {
     setIsLoading(true);
+    let didCancel = false;
     const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (event === 'SIGNED_IN' && session) {
-        console.log('[AuthContext] onAuthStateChange: SIGNED_IN event received. Session:', session);
-        // Fetch profile data when user signs in
-        const { data: profileData, error: profileError } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', session.user.id)
-          .single();
-
-        if (profileError) {
-          toast.error(`Error fetching profile: ${profileError.message}`);
-          // Potentially sign out user if profile is essential and not found
-          await supabase.auth.signOut();
-          setUser(null);
-          removeItem('user');
-          removeItem('auth_token');
-          removeItem('refresh_token');
-          setIsLoading(false);
-          console.error('[AuthContext] onAuthStateChange SIGNED_IN: Error fetching profile:', profileError);
-          return;
-        }
-        console.log('[AuthContext] onAuthStateChange SIGNED_IN: Profile fetched:', profileData);
-
-        const userObj: User = {
-          id: session.user.id,
-          email: session.user.email!,
-          name: profileData?.name || session.user.email?.split('@')[0],
-          createdAt: session.user.created_at,
-        };
-        setUser(userObj);
-        console.log('[AuthContext] onAuthStateChange SIGNED_IN: User state set:', userObj);
-        setItem('user', userObj);
-        console.log('[AuthContext] onAuthStateChange SIGNED_IN: User set in localStorage.');
-        setItem('auth_token', session.access_token);
-        console.log('[AuthContext] onAuthStateChange SIGNED_IN: Auth token set in localStorage.');
-        setItem('refresh_token', session.refresh_token);
-        console.log('[AuthContext] onAuthStateChange SIGNED_IN: Refresh token set in localStorage.');
-        // Optional: navigate('/dashboard') or let ProtectedRoute handle it
-      } else if (event === 'SIGNED_OUT') {
-        console.log('[AuthContext] onAuthStateChange: SIGNED_OUT event received.');
-        setUser(prevUser => {
-          console.log('[AuthContext] SIGNED_OUT: Current user state before setting to null:', prevUser);
-          return null;
-        });
-        removeItem('user');
-        console.log('[AuthContext] SIGNED_OUT: Removed user from localStorage.');
-        removeItem('auth_token');
-        console.log('[AuthContext] SIGNED_OUT: Removed auth_token from localStorage.');
-        removeItem('refresh_token');
-        console.log('[AuthContext] SIGNED_OUT: Removed refresh_token from localStorage.');
-        // navigate('/login'); // Navigation on logout is handled by the logout function or ProtectedRoute
-        console.log('[AuthContext] SIGNED_OUT: Auth state processed. User should be null.');
-      } else if (event === 'TOKEN_REFRESHED' && session) {
-        setItem('auth_token', session.access_token);
-        setItem('refresh_token', session.refresh_token);
-        // Potentially re-fetch user profile if it can change and needs to be fresh
-        const storedUser = getItem<User | null>('user', null);
-        if (storedUser && storedUser.id === session.user.id) {
-          setUser(storedUser); // Keep existing user data, token is updated
-        } else {
-          // If no user or different user, treat as sign in to fetch profile
+      try {
+        if (event === 'SIGNED_IN' && session) {
+          console.log('[AuthContext] onAuthStateChange: SIGNED_IN event received. Session:', session);
+          // Fetch profile data when user signs in
           const { data: profileData, error: profileError } = await supabase
             .from('profiles')
             .select('*')
             .eq('id', session.user.id)
             .single();
+
           if (profileError) {
-            toast.error(`Error fetching profile on token refresh: ${profileError.message}`);
+            toast.error(`Error fetching profile: ${profileError.message}`);
+            // Potentially sign out user if profile is essential and not found
+            await supabase.auth.signOut();
+            setUser(null);
+            removeItem('user');
+            removeItem('auth_token');
+            removeItem('refresh_token');
+            setIsLoading(false);
+            console.error('[AuthContext] onAuthStateChange SIGNED_IN: Error fetching profile:', profileError);
+            return;
+          }
+          console.log('[AuthContext] onAuthStateChange SIGNED_IN: Profile fetched:', profileData);
+
+          const userObj: User = {
+            id: session.user.id,
+            email: session.user.email!,
+            name: profileData?.name || session.user.email?.split('@')[0],
+            createdAt: session.user.created_at,
+          };
+          setUser(userObj);
+          console.log('[AuthContext] onAuthStateChange SIGNED_IN: User state set:', userObj);
+          setItem('user', userObj);
+          console.log('[AuthContext] onAuthStateChange SIGNED_IN: User set in localStorage.');
+          setItem('auth_token', session.access_token);
+          console.log('[AuthContext] onAuthStateChange SIGNED_IN: Auth token set in localStorage.');
+          setItem('refresh_token', session.refresh_token);
+          console.log('[AuthContext] onAuthStateChange SIGNED_IN: Refresh token set in localStorage.');
+          // Optional: navigate('/dashboard') or let ProtectedRoute handle it
+        } else if (event === 'SIGNED_OUT') {
+          console.log('[AuthContext] onAuthStateChange: SIGNED_OUT event received.');
+          setUser(prevUser => {
+            console.log('[AuthContext] SIGNED_OUT: Current user state before setting to null:', prevUser);
+            return null;
+          });
+          removeItem('user');
+          console.log('[AuthContext] SIGNED_OUT: Removed user from localStorage.');
+          removeItem('auth_token');
+          console.log('[AuthContext] SIGNED_OUT: Removed auth_token from localStorage.');
+          removeItem('refresh_token');
+          console.log('[AuthContext] SIGNED_OUT: Removed refresh_token from localStorage.');
+          // navigate('/login'); // Navigation on logout is handled by the logout function or ProtectedRoute
+          console.log('[AuthContext] SIGNED_OUT: Auth state processed. User should be null.');
+        } else if (event === 'TOKEN_REFRESHED' && session) {
+          setItem('auth_token', session.access_token);
+          setItem('refresh_token', session.refresh_token);
+          // Potentially re-fetch user profile if it can change and needs to be fresh
+          const storedUser = getItem<User | null>('user', null);
+          if (storedUser && storedUser.id === session.user.id) {
+            setUser(storedUser); // Keep existing user data, token is updated
           } else {
+            // If no user or different user, treat as sign in to fetch profile
+            const { data: profileData, error: profileError } = await supabase
+              .from('profiles')
+              .select('*')
+              .eq('id', session.user.id)
+              .single();
+            if (profileError) {
+              toast.error(`Error fetching profile on token refresh: ${profileError.message}`);
+            } else {
+              const userObj: User = {
+                id: session.user.id,
+                email: session.user.email!,
+                name: profileData?.name || session.user.email?.split('@')[0],
+                createdAt: session.user.created_at,
+              };
+              setUser(userObj);
+              setItem('user', userObj);
+            }
+          }
+        }
+        if (!didCancel) {
+          setIsLoading(false);
+        }
+      } catch (err) {
+        console.error('[AuthContext] onAuthStateChange: Unexpected error:', err);
+        if (!didCancel) {
+          setIsLoading(false);
+        }
+      }
+    });
+
+    // Check initial session on mount
+    const checkInitialSession = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+          console.log('[AuthContext] checkInitialSession: Session found:', session);
+          // Manually trigger a 'SIGNED_IN' like flow if session exists
+          const { data: profileData, error: profileError } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', session.user.id)
+            .single();
+
+          if (profileError) {
+            toast.error(`Error fetching initial profile: ${profileError.message}`);
+            console.error('[AuthContext] checkInitialSession: Error fetching initial profile:', profileError);
+            await supabase.auth.signOut(); // Sign out if profile fetch fails
+          } else {
+            console.log('[AuthContext] checkInitialSession: Initial profile fetched:', profileData);
             const userObj: User = {
               id: session.user.id,
               email: session.user.email!,
@@ -113,52 +156,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             };
             setUser(userObj);
             setItem('user', userObj);
+            setItem('auth_token', session.access_token);
+            setItem('refresh_token', session.refresh_token);
+            console.log('[AuthContext] checkInitialSession: User and tokens set from initial session.');
           }
         }
-      }
-      console.log('[AuthContext] onAuthStateChange: Processed event', event, '. Setting isLoading to false.');
-      setIsLoading(false);
-    });
-
-    // Check initial session on mount
-    // This replaces the previous localStorage check for a more robust session handling
-    const checkInitialSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session) {
-        console.log('[AuthContext] checkInitialSession: Session found:', session);
-        // Manually trigger a 'SIGNED_IN' like flow if session exists
-        const { data: profileData, error: profileError } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', session.user.id)
-          .single();
-
-        if (profileError) {
-          toast.error(`Error fetching initial profile: ${profileError.message}`);
-          console.error('[AuthContext] checkInitialSession: Error fetching initial profile:', profileError);
-          await supabase.auth.signOut(); // Sign out if profile fetch fails
-        } else {
-          console.log('[AuthContext] checkInitialSession: Initial profile fetched:', profileData);
-          const userObj: User = {
-            id: session.user.id,
-            email: session.user.email!,
-            name: profileData?.name || session.user.email?.split('@')[0],
-            createdAt: session.user.created_at,
-          };
-          setUser(userObj);
-          setItem('user', userObj);
-          setItem('auth_token', session.access_token);
-          setItem('refresh_token', session.refresh_token);
-          console.log('[AuthContext] checkInitialSession: User and tokens set from initial session.');
+        if (!didCancel) {
+          setIsLoading(false);
+        }
+      } catch (err) {
+        console.error('[AuthContext] checkInitialSession: Unexpected error:', err);
+        if (!didCancel) {
+          setIsLoading(false);
         }
       }
-      console.log('[AuthContext] checkInitialSession: Completed. Setting isLoading to false.');
-      setIsLoading(false);
     };
 
     checkInitialSession();
 
     return () => {
+      didCancel = true;
       authListener?.subscription.unsubscribe();
     };
   }, []);
@@ -257,10 +274,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.log('[AuthContext] logout: supabase.auth.signOut() successful. Waiting for onAuthStateChange SIGNED_OUT.');
       toast.info('Logged out successfully');
     }
-    // setUser(null); // Handled by onAuthStateChange
-    // removeItem('user'); // Handled by onAuthStateChange
-    // removeItem('auth_token'); // Handled by onAuthStateChange
-    // removeItem('refresh_token'); // Handled by onAuthStateChange
+    // Extra cleanup: clear all HabitVault-related data from localStorage
+    clearAllData();
+    // Debug: Check if session is really gone
+    const { data: { session } } = await supabase.auth.getSession();
+    console.log('[AuthContext] logout: Session after signOut:', session);
+    if (session) {
+      console.warn('[AuthContext] logout: Session still exists after signOut! Forcing reload.');
+      window.location.reload();
+      return;
+    }
     navigate('/login'); // Explicit navigation after logout action
     console.log('[AuthContext] logout: Navigated to /login');
     setIsLoading(false);
