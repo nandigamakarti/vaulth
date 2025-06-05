@@ -10,7 +10,7 @@ export default defineConfig({
   preview: {
     host: '0.0.0.0',
     port: 10000,
-    allowedHosts: 'all',
+    allowedHosts: ['vaulth.onrender.com'],  
   },
   plugins: [react()],
   resolve: {
