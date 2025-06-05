@@ -68,11 +68,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setItem('refresh_token', session.refresh_token);
         // Optional: navigate('/dashboard') or let ProtectedRoute handle it
       } else if (event === 'SIGNED_OUT') {
-        setUser(null);
+        console.log('[AuthContext] onAuthStateChange: SIGNED_OUT event received.');
+        setUser(prevUser => {
+          console.log('[AuthContext] SIGNED_OUT: Current user state before setting to null:', prevUser);
+          return null;
+        });
         removeItem('user');
+        console.log('[AuthContext] SIGNED_OUT: Removed user from localStorage.');
         removeItem('auth_token');
+        console.log('[AuthContext] SIGNED_OUT: Removed auth_token from localStorage.');
         removeItem('refresh_token');
+        console.log('[AuthContext] SIGNED_OUT: Removed refresh_token from localStorage.');
         // navigate('/login'); // Navigation on logout is handled by the logout function or ProtectedRoute
+        console.log('[AuthContext] SIGNED_OUT: Auth state processed. User should be null.');
       } else if (event === 'TOKEN_REFRESHED' && session) {
         setItem('auth_token', session.access_token);
         setItem('refresh_token', session.refresh_token);
@@ -211,13 +219,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Logout function
   const logout = async () => {
+    console.log('[AuthContext] logout: Called');
     setIsLoading(true);
     const { error } = await supabase.auth.signOut();
     // The onAuthStateChange listener will handle clearing user state and localStorage
     // for SIGNED_OUT event. We just need to ensure navigation and toast.
     if (error) {
+      console.error('[AuthContext] logout: supabase.auth.signOut() error:', error);
       toast.error(`Logout failed: ${error.message}`);
     } else {
+      console.log('[AuthContext] logout: supabase.auth.signOut() successful. Waiting for onAuthStateChange SIGNED_OUT.');
       toast.info('Logged out successfully');
     }
     // setUser(null); // Handled by onAuthStateChange
@@ -225,6 +236,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // removeItem('auth_token'); // Handled by onAuthStateChange
     // removeItem('refresh_token'); // Handled by onAuthStateChange
     navigate('/login'); // Explicit navigation after logout action
+    console.log('[AuthContext] logout: Navigated to /login');
     setIsLoading(false);
   };
 
@@ -269,7 +281,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     <AuthContext.Provider
       value={{
         user,
-        isAuthenticated: !!user,
+        isAuthenticated: !!user, // Log this value when it changes or is accessed
         isLoading,
         login,
         signup,
