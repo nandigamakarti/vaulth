@@ -32,14 +32,114 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isLoading, setIsLoading] = useState(true);
   const navigate = useNavigate();
 
-  // Check if user is already logged in
+  // Supabase auth state change listener
   useEffect(() => {
-    const storedUser = getItem<User | null>('user', null);
-    const token = getItem<string | null>('auth_token', null);
-    if (storedUser && token) {
-      setUser(storedUser);
-    }
-    setIsLoading(false);
+    setIsLoading(true);
+    const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === 'SIGNED_IN' && session) {
+        // Fetch profile data when user signs in
+        const { data: profileData, error: profileError } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', session.user.id)
+          .single();
+
+        if (profileError) {
+          toast.error(`Error fetching profile: ${profileError.message}`);
+          // Potentially sign out user if profile is essential and not found
+          await supabase.auth.signOut();
+          setUser(null);
+          removeItem('user');
+          removeItem('auth_token');
+          removeItem('refresh_token');
+          setIsLoading(false);
+          return;
+        }
+
+        const userObj: User = {
+          id: session.user.id,
+          email: session.user.email!,
+          name: profileData?.name || session.user.email?.split('@')[0],
+          createdAt: session.user.created_at,
+        };
+        setUser(userObj);
+        setItem('user', userObj);
+        setItem('auth_token', session.access_token);
+        setItem('refresh_token', session.refresh_token);
+        // Optional: navigate('/dashboard') or let ProtectedRoute handle it
+      } else if (event === 'SIGNED_OUT') {
+        setUser(null);
+        removeItem('user');
+        removeItem('auth_token');
+        removeItem('refresh_token');
+        // navigate('/login'); // Navigation on logout is handled by the logout function or ProtectedRoute
+      } else if (event === 'TOKEN_REFRESHED' && session) {
+        setItem('auth_token', session.access_token);
+        setItem('refresh_token', session.refresh_token);
+        // Potentially re-fetch user profile if it can change and needs to be fresh
+        const storedUser = getItem<User | null>('user', null);
+        if (storedUser && storedUser.id === session.user.id) {
+          setUser(storedUser); // Keep existing user data, token is updated
+        } else {
+          // If no user or different user, treat as sign in to fetch profile
+          const { data: profileData, error: profileError } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', session.user.id)
+            .single();
+          if (profileError) {
+            toast.error(`Error fetching profile on token refresh: ${profileError.message}`);
+          } else {
+            const userObj: User = {
+              id: session.user.id,
+              email: session.user.email!,
+              name: profileData?.name || session.user.email?.split('@')[0],
+              createdAt: session.user.created_at,
+            };
+            setUser(userObj);
+            setItem('user', userObj);
+          }
+        }
+      }
+      setIsLoading(false);
+    });
+
+    // Check initial session on mount
+    // This replaces the previous localStorage check for a more robust session handling
+    const checkInitialSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        // Manually trigger a 'SIGNED_IN' like flow if session exists
+        const { data: profileData, error: profileError } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', session.user.id)
+          .single();
+
+        if (profileError) {
+          toast.error(`Error fetching initial profile: ${profileError.message}`);
+          await supabase.auth.signOut(); // Sign out if profile fetch fails
+        } else {
+          const userObj: User = {
+            id: session.user.id,
+            email: session.user.email!,
+            name: profileData?.name || session.user.email?.split('@')[0],
+            createdAt: session.user.created_at,
+          };
+          setUser(userObj);
+          setItem('user', userObj);
+          setItem('auth_token', session.access_token);
+          setItem('refresh_token', session.refresh_token);
+        }
+      }
+      setIsLoading(false);
+    };
+
+    checkInitialSession();
+
+    return () => {
+      authListener?.subscription.unsubscribe();
+    };
   }, []);
 
   // Login function
@@ -111,13 +211,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Logout function
   const logout = async () => {
-    await supabase.auth.signOut();
-    removeItem('user');
-    removeItem('auth_token');
-    removeItem('refresh_token');
-    setUser(null);
-    toast.info('Logged out successfully');
-    navigate('/login');
+    setIsLoading(true);
+    const { error } = await supabase.auth.signOut();
+    // The onAuthStateChange listener will handle clearing user state and localStorage
+    // for SIGNED_OUT event. We just need to ensure navigation and toast.
+    if (error) {
+      toast.error(`Logout failed: ${error.message}`);
+    } else {
+      toast.info('Logged out successfully');
+    }
+    // setUser(null); // Handled by onAuthStateChange
+    // removeItem('user'); // Handled by onAuthStateChange
+    // removeItem('auth_token'); // Handled by onAuthStateChange
+    // removeItem('refresh_token'); // Handled by onAuthStateChange
+    navigate('/login'); // Explicit navigation after logout action
+    setIsLoading(false);
   };
 
   // Reset password function
