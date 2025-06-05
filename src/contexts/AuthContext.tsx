@@ -37,6 +37,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setIsLoading(true);
     const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (event === 'SIGNED_IN' && session) {
+        console.log('[AuthContext] onAuthStateChange: SIGNED_IN event received. Session:', session);
         // Fetch profile data when user signs in
         const { data: profileData, error: profileError } = await supabase
           .from('profiles')
@@ -53,8 +54,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           removeItem('auth_token');
           removeItem('refresh_token');
           setIsLoading(false);
+          console.error('[AuthContext] onAuthStateChange SIGNED_IN: Error fetching profile:', profileError);
           return;
         }
+        console.log('[AuthContext] onAuthStateChange SIGNED_IN: Profile fetched:', profileData);
 
         const userObj: User = {
           id: session.user.id,
@@ -63,9 +66,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           createdAt: session.user.created_at,
         };
         setUser(userObj);
+        console.log('[AuthContext] onAuthStateChange SIGNED_IN: User state set:', userObj);
         setItem('user', userObj);
+        console.log('[AuthContext] onAuthStateChange SIGNED_IN: User set in localStorage.');
         setItem('auth_token', session.access_token);
+        console.log('[AuthContext] onAuthStateChange SIGNED_IN: Auth token set in localStorage.');
         setItem('refresh_token', session.refresh_token);
+        console.log('[AuthContext] onAuthStateChange SIGNED_IN: Refresh token set in localStorage.');
         // Optional: navigate('/dashboard') or let ProtectedRoute handle it
       } else if (event === 'SIGNED_OUT') {
         console.log('[AuthContext] onAuthStateChange: SIGNED_OUT event received.');
@@ -109,6 +116,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           }
         }
       }
+      console.log('[AuthContext] onAuthStateChange: Processed event', event, '. Setting isLoading to false.');
       setIsLoading(false);
     });
 
@@ -117,6 +125,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const checkInitialSession = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (session) {
+        console.log('[AuthContext] checkInitialSession: Session found:', session);
         // Manually trigger a 'SIGNED_IN' like flow if session exists
         const { data: profileData, error: profileError } = await supabase
           .from('profiles')
@@ -126,8 +135,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         if (profileError) {
           toast.error(`Error fetching initial profile: ${profileError.message}`);
+          console.error('[AuthContext] checkInitialSession: Error fetching initial profile:', profileError);
           await supabase.auth.signOut(); // Sign out if profile fetch fails
         } else {
+          console.log('[AuthContext] checkInitialSession: Initial profile fetched:', profileData);
           const userObj: User = {
             id: session.user.id,
             email: session.user.email!,
@@ -138,8 +149,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setItem('user', userObj);
           setItem('auth_token', session.access_token);
           setItem('refresh_token', session.refresh_token);
+          console.log('[AuthContext] checkInitialSession: User and tokens set from initial session.');
         }
       }
+      console.log('[AuthContext] checkInitialSession: Completed. Setting isLoading to false.');
       setIsLoading(false);
     };
 
@@ -152,20 +165,29 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Login function
   const login = async (email: string, password: string) => {
+    console.log('[AuthContext] login: Called with email:', email);
     setIsLoading(true);
     try {
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
-      if (error) throw error;
+      if (error) {
+        console.error('[AuthContext] login: supabase.auth.signInWithPassword error:', error);
+        throw error;
+      }
+      console.log('[AuthContext] login: supabase.auth.signInWithPassword successful. User data from Supabase:', data.user);
       // Fetch profile
       const { data: profileData, error: profileError } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', data.user.id)
         .single();
-      if (profileError) throw profileError;
+      if (profileError) {
+        console.error('[AuthContext] login: Error fetching profile:', profileError);
+        throw profileError;
+      }
+      console.log('[AuthContext] login: Profile fetched successfully:', profileData);
       const userObj = {
         id: data.user.id,
         email: data.user.email,
@@ -175,12 +197,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setUser(userObj);
       setItem('user', userObj);
       setItem('auth_token', data.session.access_token);
+      console.log('[AuthContext] login: User object created and set in state & localStorage:', userObj);
       toast.success('Logged in successfully');
       navigate('/dashboard');
+      console.log('[AuthContext] login: Navigated to /dashboard.');
     } catch (error: any) {
+      console.error('[AuthContext] login: Catch block error:', error);
       toast.error(`Login failed: ${error.message || 'An error occurred'}`);
       throw error;
     } finally {
+      console.log('[AuthContext] login: Finally block reached. Setting isLoading to false.');
       setIsLoading(false);
     }
   };
